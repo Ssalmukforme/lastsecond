@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#e9e9dd" />
+  <meta name="description" content="LAST SECOND — 로우폴리 3D 투사체 회피 생존 게임. 마지막 1초까지 살아남으세요." />
+  <title>LAST SECOND — 마지막 1초까지</title>
+</head>
+<body>
+  <canvas id="world" aria-label="3D 생존 경기장"></canvas>
+  <div class="vignette"></div>
+  <header id="header">
+    <a class="brand" href="#" aria-label="시작 화면"><span class="brand-icon">✳</span><span>LAST<br>SECOND<span class="brand-dot">®</span></span></a>
+    <div class="header-center"><span class="live-dot"></span> A GAME OF SURVIVAL <span class="header-divider">/</span> VOL. 01</div>
+    <div class="header-actions"><button id="sound" class="icon-button" title="사운드 켜기 / 끄기" aria-label="사운드 끄기">♫</button><button id="fullscreen" class="icon-button" title="전체 화면" aria-label="전체 화면">⛶</button></div>
+  </header>
+  <main id="menu">
+    <div class="hero">
+      <div class="eyebrow"><span class="small-line"></span> DODGE. BLINK. SURVIVE.</div>
+      <h1>LAST<br><span>SECOND</span><i>↗</i></h1>
+      <p class="hero-copy">마지막 1초까지, 살아남아라.</p>
+      <p class="hero-description">끝없이 쏟아지는 투사체. 점점 좁아지는 기회.<br>당신의 한계는 몇 분인가요?</p>
+      <div class="menu-buttons"><button id="start" class="primary-button">생존 시작 <span>↗</span></button><button id="records-button" class="secondary-button"><span>≡</span> 생존 기록</button></div>
+      <div class="player-name"><label for="nickname">PLAYER</label><input id="nickname" maxlength="12" placeholder="플레이어 이름" value="RUNNER" aria-label="플레이어 이름"/><span>↵</span></div>
+      <div class="personal-best"><span>PERSONAL BEST</span><strong id="menu-best">--:--.---</strong><span class="best-unit">생존 시간</span></div>
+    </div>
+    <aside class="map-label"><div class="map-number">01 <span>/ ARENA</span></div><h2>고요한 폐허</h2><p>THE SILENT RUINS</p><div class="map-tags"><span>로우폴리</span><span>무한 생존</span><span class="map-difficulty">● 난도 상승</span></div></aside>
+    <div class="scene-caption"><span class="orange-cross">+</span> ONE ARENA. ONE LIFE. <span>NO SECOND CHANCES.</span></div>
+  </main>
+  <footer id="menu-footer"><div class="controls"><span><kbd>W</kbd><span class="wasd"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><em>이동</em></span><span><kbd class="space-key">SPACE</kbd><em>점프</em></span><span><kbd>←</kbd><kbd>→</kbd><em>시점 전환</em></span><span><kbd>F</kbd><em>점멸 <small>30초</small></em></span></div><p>시점을 바꾸고, 빈틈을 찾아.</p><span class="footer-version">SURVIVAL PROTOTYPE <b>01.0</b></span></footer>
+  <section id="hud" hidden>
+    <div id="edge-warnings" aria-hidden="true"></div>
+    <div class="hud-top"><div class="arena-badge"><span class="live-dot"></span> 고요한 폐허 <small>ARENA 01</small></div><div class="timer"><span>SURVIVAL TIME</span><strong id="timer">00:00.000</strong><small id="best-hud">BEST --:--.---</small></div><button id="pause-button" class="glass-button" aria-label="일시정지">Ⅱ <span>ESC</span></button></div>
+    <div class="view-controls" aria-label="시점 전환"><button id="view-left" aria-label="시점 왼쪽으로 90도" title="왼쪽 방향키">←</button><span id="view-direction" aria-live="polite">북 N</span><button id="view-right" aria-label="시점 오른쪽으로 90도" title="오른쪽 방향키">→</button></div>
+    <div id="announcement" class="announcement" aria-live="polite"></div>
+    <div class="phase-panel"><span id="phase-label">PHASE 01</span><strong id="phase-name">첫 번째 시험</strong><div class="progress-track"><i id="phase-progress"></i></div><small id="next-phase">다음 공격까지 20초</small></div>
+    <div class="hud-bottom"><div class="ability"><div class="ability-key">F</div><div><span>점멸</span><strong id="blink-label">준비 완료</strong><div class="blink-track"><i id="blink-progress"></i></div></div><small>이동 방향으로 순간이동</small></div><div class="game-hints"><span><kbd>W A S D</kbd> 이동</span><span><kbd>SPACE</kbd> 점프</span><span><kbd>← →</kbd> 90° 시점 전환</span><span>한 번의 피격으로 종료</span></div></div>
+    <div id="danger-flash"></div>
+  </section>
+  <div id="overlay" class="overlay" hidden>
+    <section id="pause-panel" class="dialog" hidden><div class="eyebrow">TAKE A BREATH</div><h2>잠깐, 숨 고르기.</h2><p>시간과 투사체가 멈춰 있습니다.</p><button id="resume" class="primary-button">계속 살아남기 <span>↗</span></button><button id="pause-home" class="text-button">시작 화면으로</button></section>
+    <section id="result-panel" class="dialog result-dialog" hidden><div class="eyebrow" id="result-eyebrow">EVERY SECOND COUNTS</div><h2>당신의 마지막 1초.</h2><div class="result-time" id="result-time">00:00.000</div><p id="result-description"></p><div class="result-stats"><div><span>도달 단계</span><strong id="result-phase">01</strong></div><div><span>점멸 사용</span><strong id="result-blinks">0</strong></div><div><span>내 순위</span><strong id="result-rank">#1</strong></div></div><button id="retry" class="primary-button">한 번 더 도전 <span>↗</span></button><button id="result-home" class="text-button">시작 화면으로</button></section>
+    <section id="records-panel" class="dialog records-dialog" hidden><div class="eyebrow">THE SURVIVORS</div><h2>생존 기록<span>↗</span></h2><p>이 브라우저에 저장된 상위 10개의 기록</p><div class="table-head"><span>순위 / 플레이어</span><span>생존 시간</span></div><ol id="records-list"></ol><button id="close-records" class="secondary-button">돌아가기</button></section>
+  </div>
+  <div id="loading"><span class="brand-icon">✳</span><p>경기장 준비 중</p></div>
+  <div id="toast" role="status"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
