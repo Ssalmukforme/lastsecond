@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import './style.css';
 import { BLINK_COOLDOWN, BLINK_DISTANCE, PHASES, phaseAt, difficulty, formatTime, clampToArena, segmentDistanceSq, rankRecords, VIEWS, turnView, screenMovement } from './game.js';
+import { createRanking } from './ranking.js';
+import { RANKING_GAME, RANKING_BOARD } from './ranking-boards.js';
+
+const ranking = createRanking(RANKING_GAME, { storagePrefix: 'last-second' });
+// The dev self-test (?test=1) fakes deaths; those must never reach the shared leaderboard.
+const TEST_MODE = import.meta.env.DEV && new URLSearchParams(location.search).has('test');
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('world');
@@ -328,7 +334,7 @@ function startGame() {
 function home() {
   clearCombat(); mode = 'menu'; keys.clear(); panels(null);
   $('menu').hidden = false; $('menu-footer').hidden = false; $('hud').hidden = true;
-  document.body.classList.remove('playing'); player.position.set(3, 0, 5); body.visible = true; body.rotation.set(0, -.5, 0); refreshBest();
+  document.body.classList.remove('playing'); player.position.set(3, 0, 5); body.visible = true; body.rotation.set(0, -.5, 0); refreshBest(); refreshWorldBest();
 }
 function pause() { if (mode !== 'playing') return; mode = 'paused'; keys.clear(); panels('pause'); }
 function resume() { if (mode !== 'paused') return; mode = 'playing'; keys.clear(); panels(null); }
@@ -345,17 +351,66 @@ function die(reason) {
   $('result-eyebrow').textContent = survival > oldBest ? 'NEW PERSONAL BEST ↗' : 'EVERY SECOND COUNTS';
   $('result-description').textContent = `${reason}에 피격되었습니다. 다음에는 1초 더.`;
   $('result-phase').textContent = String(phase + 1).padStart(2, '0'); $('result-blinks').textContent = blinks;
-  $('result-rank').textContent = rank <= 10 ? `#${rank}` : '10위 밖';
   refreshBest();
+  submitGlobal(entry.name, survival, rank <= 10 ? `로컬 #${rank}` : '로컬 10위 밖');
   setTimeout(() => { if (mode === 'over') panels('result'); }, 650);
 }
-function showRecords() {
-  const list = $('records-list'); list.replaceChildren();
-  if (!records.length) { const p = document.createElement('p'); p.className = 'empty-records'; p.textContent = '아직 기록이 없습니다. 첫 번째 생존자가 되어보세요.'; list.append(p); }
-  records.forEach((r, i) => {
-    const li = document.createElement('li'), label = document.createElement('span'), rank = document.createElement('b'), time = document.createElement('strong');
-    rank.textContent = String(i + 1).padStart(2, '0'); label.append(rank, document.createTextNode(r.name)); time.textContent = formatTime(r.time); li.append(label, time); list.append(li);
-  }); panels('records');
+let submitToken = 0;
+async function submitGlobal(name, time, localRank) {
+  const token = ++submitToken, status = $('result-global');
+  $('result-rank').textContent = '…'; status.className = 'result-global'; status.textContent = '전체 랭킹에 등록하는 중…';
+  if (TEST_MODE) { $('result-rank').textContent = localRank; status.textContent = '개발 검증 모드에서는 전체 랭킹에 등록하지 않습니다.'; return; }
+  try {
+    const { improved, standing } = await ranking.submit(RANKING_BOARD, { name, value: time * 1000, meta: { phase: phase + 1, blinks } });
+    if (token !== submitToken) return;
+    $('result-rank').textContent = `#${standing.rank}`;
+    status.classList.add('ok'); status.textContent = `전체 ${standing.rank}위 / ${standing.total}명${improved ? ' · 내 최고 기록 갱신' : ''}`;
+    refreshWorldBest(true);
+  } catch (error) {
+    if (token !== submitToken) return;
+    $('result-rank').textContent = localRank;
+    status.classList.add('error'); status.textContent = `${ranking.describeError(error)} 기록은 이 브라우저에 저장했어요.`;
+  }
+}
+let worldToken = 0;
+async function refreshWorldBest(fresh = false) {
+  const token = ++worldToken;
+  try {
+    const { entries } = await ranking.board(RANKING_BOARD, { fresh, limit: 1 });
+    if (token === worldToken) $('menu-world').textContent = entries[0] ? `${formatTime(entries[0].value / 1000)} · ${entries[0].name}` : '아직 기록 없음';
+  } catch { if (token === worldToken) $('menu-world').textContent = '전체 랭킹 연결 안 됨'; }
+}
+refreshWorldBest();
+function recordRow(position, name, time, you = false) {
+  const li = document.createElement('li'), label = document.createElement('span'), rank = document.createElement('b'), strong = document.createElement('strong');
+  rank.textContent = String(position).padStart(2, '0'); label.append(rank, document.createTextNode(name));
+  if (you) { li.className = 'you'; label.append(Object.assign(document.createElement('em'), { textContent: 'YOU' })); }
+  strong.textContent = formatTime(time); li.append(label, strong); return li;
+}
+function emptyRecords(list, text) { const p = document.createElement('p'); p.className = 'empty-records'; p.textContent = text; list.append(p); }
+let recordsTab = 'global', recordsToken = 0;
+async function showRecords(tab = recordsTab) {
+  recordsTab = tab; panels('records');
+  const list = $('records-list'), token = ++recordsToken; list.replaceChildren(); $('records-standing').textContent = '';
+  document.querySelectorAll('[data-records-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.recordsTab === tab)));
+  $('records-caption').textContent = tab === 'global' ? '모든 플레이어의 최고 생존 기록' : '이 브라우저에 저장된 상위 10개의 기록';
+  if (tab === 'local') {
+    if (!records.length) emptyRecords(list, '아직 기록이 없습니다. 첫 번째 생존자가 되어보세요.');
+    records.forEach((r, i) => list.append(recordRow(i + 1, r.name, r.time)));
+    return;
+  }
+  emptyRecords(list, '전체 랭킹을 불러오는 중…');
+  try {
+    const data = await ranking.board(RANKING_BOARD);
+    if (token !== recordsToken) return;
+    list.replaceChildren();
+    if (!data.entries.length) emptyRecords(list, '아직 전체 랭킹에 기록이 없습니다. 첫 번째 생존자가 되어보세요.');
+    data.entries.forEach(e => list.append(recordRow(e.rank, e.name, e.value / 1000, e.you)));
+    $('records-standing').textContent = data.you ? `내 순위 ${data.you.rank}위 · ${formatTime(data.you.value / 1000)} · 참가 ${data.total}명` : data.total ? `참가 ${data.total}명` : '';
+  } catch (error) {
+    if (token !== recordsToken) return;
+    list.replaceChildren(); emptyRecords(list, `${ranking.describeError(error)} 내 기록 탭에서 이 브라우저의 기록을 볼 수 있어요.`);
+  }
 }
 function blink() {
   if (mode !== 'playing') return;
@@ -573,7 +628,8 @@ function frame(now) {
 $('start').onclick = startGame; $('retry').onclick = startGame;
 $('pause-button').onclick = pause; $('resume').onclick = resume;
 $('pause-home').onclick = home; $('result-home').onclick = home;
-$('records-button').onclick = showRecords; $('close-records').onclick = () => panels(null);
+$('records-button').onclick = () => showRecords('global'); $('close-records').onclick = () => panels(null);
+document.querySelectorAll('[data-records-tab]').forEach(b => { b.onclick = () => showRecords(b.dataset.recordsTab); });
 $('view-left').onclick = () => rotateView(-1); $('view-right').onclick = () => rotateView(1);
 document.querySelector('.brand').onclick = (e) => { e.preventDefault(); home(); };
 $('sound').onclick = () => { soundEnabled = !soundEnabled; $('sound').textContent = soundEnabled ? '♫' : '♪̸'; $('sound').setAttribute('aria-label', soundEnabled ? '사운드 끄기' : '사운드 켜기'); if (soundEnabled) tone(600); toast(soundEnabled ? '사운드 켜짐' : '사운드 꺼짐'); };
